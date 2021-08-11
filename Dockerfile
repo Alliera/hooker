@@ -18,6 +18,6 @@ RUN cd /hooker && go build
 WORKDIR /hooker
 ARG GITHUB_TOKEN=token
 RUN git clone https://${GITHUB_TOKEN}@github.com/Alliera/xircl.git
-RUN service docker start
+RUN mkdir -p /etc/docker
 RUN echo '{"storage-driver": "overlay2"}' > /etc/docker/daemon.json
 CMD service docker start && ./hooker
