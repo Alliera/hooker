@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+  hooker:
+    container_name: hooker
+    restart: always
+    privileged: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - GITHUB_TOKEN=$GITHUB_TOKEN
+    ports:
+      - 7479:7479
