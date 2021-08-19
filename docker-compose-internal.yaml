@@ -1,8 +1,0 @@
-version: "3"
-
-services:
-  xircl_react:
-    container_name: xircl_react
-    build:
-      context: xircl
-      dockerfile: Dockerfile-react

@@ -45,12 +45,12 @@ func startQueueHandler() {
 		keyWord := "/react/"
 		hc := body.HeadCommit
 		if hasWord(hc.Added, keyWord) || hasWord(hc.Modified, keyWord) || hasWord(hc.Removed, keyWord) {
-			cmd := "cd xircl && " +
+			cmd := "cd /var/www/hooker/xircl && " +
 				"git reset --hard && git checkout develop && git pull &&" +
 				"git checkout " + branch + " && " +
 				"git pull"
 			Shellout(cmd)
-			Shellout("docker-compose build xircl_react")
+			Shellout("cd /var/www/hooker/xircl && docker-compose build xircl_react")
 		} else {
 			fmt.Println("Not react commit, skip...")
 		}
