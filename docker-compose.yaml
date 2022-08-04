@@ -6,3 +6,18 @@ services:
     build:
       context: xircl
       dockerfile: Dockerfile-react
+  sourceguardian:
+    container_name: xircl_sourceguardian
+    build:
+      context: .
+      dockerfile: Dockerfile-sourceguardian
+    working_dir: /root
+    volumes:
+      - ./sourceguardian:/root/sourceguardian
+      - /var/run/docker.sock:/var/run/sourceguardian-docker.sock
+      - ./xircl:/xircl
+    environment:
+      NEXTCLOUD_USER: ${NEXTCLOUD_USER}
+      NEXTCLOUD_PASSWORD: ${NEXTCLOUD_PASSWORD}
+      NEXTCLOUD_HOST: ${NEXTCLOUD_HOST}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}

@@ -42,19 +42,29 @@ func startQueueHandler() {
 			continue
 		}
 		branch := strings.Replace(body.Ref, "refs/heads/", "", -1)
-		keyWord := "/react/"
 		hc := body.HeadCommit
-		if hasWord(hc.Added, keyWord) || hasWord(hc.Modified, keyWord) || hasWord(hc.Removed, keyWord) {
-			cmd := "cd /var/www/hooker/xircl && " +
-				"git reset --hard && git checkout develop && git pull &&" +
-				"git checkout " + branch + " && " +
-				"git pull"
-			Shellout(cmd)
+		if commitHasWord(hc, "/react/") {
+			updateGit(branch)
 			Shellout("cd /var/www/hooker/xircl && docker-compose build xircl_react")
+		} else if commitHasWord(hc, "/src/") {
+			updateGit(branch)
 		} else {
 			fmt.Println("Not react commit, skip...")
+			Shellout("cd /var/www/hooker/ && docker-compose up sourceguardian")
 		}
 	}
+}
+
+func commitHasWord(hc HeadCommit, keyWord string) bool {
+	return hasWord(hc.Added, keyWord) || hasWord(hc.Modified, keyWord) || hasWord(hc.Removed, keyWord)
+}
+
+func updateGit(branch string) {
+	cmd := "cd /var/www/hooker/xircl && " +
+		"git reset --hard && git checkout develop && git pull &&" +
+		"git checkout " + branch + " && " +
+		"git pull"
+	Shellout(cmd)
 }
 
 func startRestApiServer() {
