@@ -2,7 +2,7 @@ cd /xircl
 git reset --hard
 git pull
 php bin/remove-files-with-annotoaions.php
-echo $(find src/ -type f -exec md5sum {} \; | sort -k 1 | md5sum | sed 's/ //g') > checksum
+echo $(find src -type f -exec md5sum {} \; | awk '{print $1}' | sort | md5sum | sed 's/ //g') > checksum
 FILE=$(cat checksum)-php.zip
 cd /root
 curl -u $NEXTCLOUD_USER:$NEXTCLOUD_PASSWORD \
