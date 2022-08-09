@@ -45,7 +45,7 @@ func startQueueHandler() {
 		hc := body.HeadCommit
 		if commitHasWord(hc, "/react/") {
 			updateGit(branch)
-			Shellout("cd /var/www/hooker/xircl && docker-compose build xircl_react")
+			Shellout("cd /var/www/hooker/ && docker-compose build xircl_react")
 		} else if commitHasWord(hc, "src/") {
 			updateGit(branch)
 			Shellout("cd /var/www/hooker/ && docker-compose up sourceguardian")
