@@ -43,10 +43,13 @@ func startQueueHandler() {
 		}
 		branch := strings.Replace(body.Ref, "refs/heads/", "", -1)
 		hc := body.HeadCommit
-		if commitHasWord(hc, "/react/") {
+		if commitHasWord(hc, "/react/") && commitHasWord(hc, "/Xircl/") {
+			updateGit(branch)
+			Shellout("cd /var/www/hooker/ && docker-compose build xircl_react && docker-compose up sourceguardian")
+		} else if commitHasWord(hc, "/react/") {
 			updateGit(branch)
 			Shellout("cd /var/www/hooker/ && docker-compose build xircl_react")
-		} else if commitHasWord(hc, "src/") {
+		} else if commitHasWord(hc, "/Xircl/") {
 			updateGit(branch)
 			Shellout("cd /var/www/hooker/ && docker-compose up sourceguardian")
 		} else {
