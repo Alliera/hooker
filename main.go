@@ -46,7 +46,7 @@ func startQueueHandler() {
 		if commitHasWord(hc, "/react/") {
 			updateGit(branch)
 			Shellout("cd /var/www/hooker/xircl && docker-compose build xircl_react")
-		} else if commitHasWord(hc, "/src/") {
+		} else if commitHasWord(hc, "src/") {
 			updateGit(branch)
 		} else {
 			fmt.Println("Not react commit, skip...")
