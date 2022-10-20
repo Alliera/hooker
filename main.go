@@ -65,9 +65,10 @@ func commitHasWord(hc HeadCommit, keyWord string) bool {
 func updateGit(branch string) {
 	cmd := "cd /var/www/hooker/xircl && " +
 		"git reset --hard && git checkout develop && git pull && " +
-		"git branch | grep -v \"develop\" | grep -v \"master\" | xargs git branch -D && " +
+		"for b in `git branch --merged | grep -v \\*`; do git branch -D $b; done && " +
 		"git checkout " + branch + " && " +
 		"git pull"
+	fmt.Println(cmd)
 	Shellout(cmd)
 }
 
