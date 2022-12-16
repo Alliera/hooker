@@ -43,6 +43,7 @@ func startQueueHandler() {
 		}
 		branch := strings.Replace(body.Ref, "refs/heads/", "", -1)
 		hc := body.HeadCommit
+		Shellout("source /var/www/hooker/.env")
 		if commitHasWord(hc, "/react/") && commitHasWord(hc, "/Xircl/") {
 			updateGit(branch)
 			Shellout("cd /var/www/hooker/ && docker-compose build xircl_react && docker-compose up sourceguardian")
