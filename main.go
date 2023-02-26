@@ -50,7 +50,7 @@ func startQueueHandler() {
 		hc := body.HeadCommit
 		Shellout("source /var/www/hooker/.env")
 		if body.Repository.Name == "web-ui" {
-			updateService("web-ui", branch, "web-ui")
+			updateService("web-ui", branch, "web_ui")
 		} else if body.Repository.Name == "xircl-api" {
 			updateService("xircl-api", branch, "sourceguardian")
 		} else {
