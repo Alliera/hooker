@@ -1,4 +1,6 @@
 .idea
 xircl
+web-ui
+xircl-api
 .env
 /sourceguardian

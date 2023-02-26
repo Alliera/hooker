@@ -26,6 +26,11 @@ type Body struct {
 	Ref        string     `json:"ref"`
 	After      string     `json:"after"`
 	HeadCommit HeadCommit `json:"head_commit"`
+	Repository Repository `json:"repository"`
+}
+
+type Repository struct {
+	Name string `json:"name"`
 }
 
 type HeadCommit struct {
@@ -44,28 +49,38 @@ func startQueueHandler() {
 		branch := strings.Replace(body.Ref, "refs/heads/", "", -1)
 		hc := body.HeadCommit
 		Shellout("source /var/www/hooker/.env")
-		if commitHasWord(hc, "/react/") && commitHasWord(hc, "/Xircl/") {
-			updateGit(branch)
-			Shellout("cd /var/www/hooker/ && docker-compose build xircl_react && docker-compose up sourceguardian")
-		} else if commitHasWord(hc, "/react/") {
-			updateGit(branch)
-			Shellout("cd /var/www/hooker/ && docker-compose build xircl_react")
-		} else if commitHasWord(hc, "/Xircl/") {
-			updateGit(branch)
-			Shellout("cd /var/www/hooker/ && docker-compose up sourceguardian")
+		if body.Repository.Name == "web-ui" {
+			updateService("web-ui", branch, "web-ui")
+		} else if body.Repository.Name == "xircl-api" {
+			updateService("xircl-api", branch, "sourceguardian")
 		} else {
-			fmt.Println("Not target commit, skip...")
+			//Deprecated Flow:
+			if commitHasWord(hc, "/react/") && commitHasWord(hc, "/Xircl/") {
+				updateService("xircl", branch, "xircl_react")
+				updateService("xircl", branch, "sourceguardian_legacy")
+			} else if commitHasWord(hc, "/react/") {
+				updateService("xircl", branch, "xircl_react")
+			} else if commitHasWord(hc, "/Xircl/") {
+				updateService("xircl", branch, "sourceguardian_legacy")
+			} else {
+				fmt.Println("Not target commit, skip...")
+			}
 		}
 	}
+}
+
+func updateService(repoName string, branch string, service string) {
+	updateGit(branch, repoName)
+	Shellout("cd /var/www/hooker/ && docker-compose build " + service)
 }
 
 func commitHasWord(hc HeadCommit, keyWord string) bool {
 	return hasWord(hc.Added, keyWord) || hasWord(hc.Modified, keyWord) || hasWord(hc.Removed, keyWord)
 }
 
-func updateGit(branch string) {
-	cmd := "cd /var/www/hooker/xircl && " +
-		"git reset --hard && git checkout develop && git pull && " +
+func updateGit(branch string, projectFolderName string) {
+	cmd := "cd /var/www/hooker/" + projectFolderName + " && " +
+		"git reset --hard && git checkout master && git pull && " +
 		"for b in `git branch --merged | grep -v \\*`; do git branch -D $b; done && " +
 		"git checkout " + branch + " && " +
 		"git pull"
