@@ -4,7 +4,7 @@ services:
   web_ui:
     container_name: web_ui
     build:
-      context: web_ui
+      context: web-ui
       dockerfile: Dockerfile
       args:
         - NEXTCLOUD_USER=$NEXTCLOUD_USER
