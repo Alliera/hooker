@@ -61,7 +61,7 @@ func startQueueHandler() {
 func updateService(repoName string, branch string, service string) {
 	updateGit(branch, repoName)
 	Shellout("cd /var/www/hooker/ && docker-compose build " + service)
-	Shellout("cd /var/www/hooker/ && docker-compose up -d " + service)
+	Shellout("cd /var/www/hooker/ && docker-compose up " + service)
 }
 
 func commitHasWord(hc HeadCommit, keyWord string) bool {
