@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	//      "time"
 )
 
 const ShellToUse = "bash"
@@ -47,24 +46,14 @@ func startQueueHandler() {
 			continue
 		}
 		branch := strings.Replace(body.Ref, "refs/heads/", "", -1)
-		hc := body.HeadCommit
+
 		Shellout("source /var/www/hooker/.env")
 		if body.Repository.Name == "web-ui" {
 			updateService("web-ui", branch, "web_ui")
 		} else if body.Repository.Name == "xircl-api" {
 			updateService("xircl-api", branch, "sourceguardian")
 		} else {
-			//Deprecated Flow:
-			if commitHasWord(hc, "/react/") && commitHasWord(hc, "/Xircl/") {
-				updateService("xircl", branch, "xircl_react")
-				updateService("xircl", branch, "sourceguardian_legacy")
-			} else if commitHasWord(hc, "/react/") {
-				updateService("xircl", branch, "xircl_react")
-			} else if commitHasWord(hc, "/Xircl/") {
-				updateService("xircl", branch, "sourceguardian_legacy")
-			} else {
-				fmt.Println("Not target commit, skip...")
-			}
+			fmt.Println("Not target commit, skip...")
 		}
 	}
 }
