@@ -30,7 +30,7 @@ func init() {
 	clientUser = slack.New(userToken, slack.OptionDebug(false))
 	bot = slack.New(token, slack.OptionDebug(false))
 	ProgressMessage = "Create build..."
-	lastExecutionTime = 100 * time.Second
+	lastExecutionTime = 150 * time.Second
 }
 func NotifyBuildInfo(
 	pusher string,
@@ -159,7 +159,8 @@ func Process(ctx context.Context) {
 	opts.Empty = "⬛"
 	pbar := progress.New(token, channelID, opts)
 	opts.TotalUnits = int(lastExecutionTime / time.Second)
-	for i := 0; i <= pbar.Opts.TotalUnits; i++ {
+	i := 0
+	for {
 		select {
 		case <-ctx.Done():
 			_ = pbar.Update(opts.TotalUnits)
@@ -169,10 +170,13 @@ func Process(ctx context.Context) {
 			}
 			return
 		case <-time.After(1 * time.Second):
+			if i == opts.TotalUnits {
+				i -= 1
+			}
 			go func() {
 				_ = pbar.Update(i)
 			}()
 		}
+		i++
 	}
-	lastExecutionTime = time.Now().Sub(startTime)
 }
