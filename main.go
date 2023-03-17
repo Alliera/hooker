@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"hooker/bot"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -23,9 +25,11 @@ func main() {
 
 type Body struct {
 	Ref        string     `json:"ref"`
+	BaseRef    *string    `json:"base_ref"`
 	After      string     `json:"after"`
 	HeadCommit HeadCommit `json:"head_commit"`
 	Repository Repository `json:"repository"`
+	Pusher     User       `json:"pusher"`
 }
 
 type Repository struct {
@@ -33,9 +37,15 @@ type Repository struct {
 }
 
 type HeadCommit struct {
-	Added    []string `json:"added"`
-	Removed  []string `json:"removed"`
-	Modified []string `json:"modified"`
+	Id        string `json:"id"`
+	Author    User   `json:"author"`
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp"`
+}
+
+type User struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 func startQueueHandler() {
@@ -45,27 +55,38 @@ func startQueueHandler() {
 			fmt.Println("Branch is not defined", body.Ref)
 			continue
 		}
-		branch := strings.Replace(body.Ref, "refs/heads/", "", -1)
+		ref := strings.Replace(body.Ref, "refs/heads/", "", -1)
 
+		branch := ref
+		tag := ""
+		if body.BaseRef != nil {
+			branch = strings.Replace(*body.BaseRef, "refs/heads/", "", -1)
+			tag = strings.Replace(body.Ref, "refs/tags/", "", -1)
+		}
 		Shellout("source /var/www/hooker/.env")
 		if body.Repository.Name == "web-ui" {
-			updateService("web-ui", branch, "web_ui")
+			bot.NotifyBuildInfo(
+				body.Pusher.Name,
+				body.HeadCommit.Author.Name,
+				tag,
+				branch,
+				body.HeadCommit.Message,
+				body.HeadCommit.Timestamp,
+				body.HeadCommit.Id,
+			)
+			ctx, progressFinished := context.WithCancel(context.Background())
+			go bot.Process(ctx)
+			updateGit(ref, "web-ui")
+			Shellout("cd /var/www/hooker/ && docker-compose build web_ui")
+			progressFinished()
+			bot.NotifyFinished()
 		} else if body.Repository.Name == "xircl-api" {
-			updateService("xircl-api", branch, "sourceguardian")
+			updateGit(ref, "xircl-api")
+			Shellout("cd /var/www/hooker/ && docker-compose up sourceguardian")
 		} else {
 			fmt.Println("Not target commit, skip...")
 		}
 	}
-}
-
-func updateService(repoName string, branch string, service string) {
-	updateGit(branch, repoName)
-	Shellout("cd /var/www/hooker/ && docker-compose build " + service)
-	Shellout("cd /var/www/hooker/ && docker-compose up " + service)
-}
-
-func commitHasWord(hc HeadCommit, keyWord string) bool {
-	return hasWord(hc.Added, keyWord) || hasWord(hc.Modified, keyWord) || hasWord(hc.Removed, keyWord)
 }
 
 func updateGit(branch string, projectFolderName string) {
@@ -95,7 +116,7 @@ func startRestApiServer() {
 }
 
 func hook(w http.ResponseWriter, r *http.Request) {
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		fmt.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -120,16 +141,7 @@ func Shellout(command string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	cmd.Run()
-}
-
-func hasWord(list []string, word string) bool {
-	for _, v := range list {
-		if strings.Contains(v, word) {
-			return true
-		}
-	}
-	return false
+	_ = cmd.Run()
 }
 
 func Logger(next http.HandlerFunc) http.HandlerFunc {
