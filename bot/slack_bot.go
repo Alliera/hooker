@@ -170,7 +170,7 @@ func Process(ctx context.Context) {
 			}
 			return
 		case <-time.After(1 * time.Second):
-			if i < opts.TotalUnits {
+			if i < opts.TotalUnits-(opts.TotalUnits/100)-1 {
 				go func() {
 					_ = pbar.Update(i)
 				}()
