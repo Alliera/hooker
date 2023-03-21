@@ -11,11 +11,16 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 const ShellToUse = "bash"
 
 var queue chan Body
+
+var currentWebUiBranch string
+
+var finishWebUiBuild func()
 
 func main() {
 	queue = make(chan Body, 300)
@@ -56,37 +61,43 @@ func startQueueHandler() {
 			continue
 		}
 		ref := strings.Replace(body.Ref, "refs/heads/", "", -1)
-
-		branch := ref
-		tag := ""
-		if body.BaseRef != nil {
-			branch = strings.Replace(*body.BaseRef, "refs/heads/", "", -1)
-			tag = strings.Replace(body.Ref, "refs/tags/", "", -1)
-		}
-		Shellout("source /var/www/hooker/.env")
+		Shellout(context.Background(), "source /var/www/hooker/.env")
 		if body.Repository.Name == "web-ui" {
+			var tag string
+			tag, currentWebUiBranch = getTagAndBranch(body)
 			bot.NotifyBuildInfo(
 				body.Pusher.Name,
 				body.HeadCommit.Author.Name,
 				tag,
-				branch,
+				currentWebUiBranch,
 				body.HeadCommit.Message,
 				body.HeadCommit.Timestamp,
 				body.HeadCommit.Id,
 			)
-			ctx, progressFinished := context.WithCancel(context.Background())
+			var ctx context.Context
+			ctx, finishWebUiBuild = context.WithCancel(context.Background())
 			go bot.Process(ctx)
 			updateGit(ref, "web-ui")
-			Shellout("cd /var/www/hooker/ && docker-compose build web_ui")
-			progressFinished()
+			Shellout(ctx, "cd /var/www/hooker/ && docker-compose build web_ui")
+			finishWebUiBuild()
 			bot.NotifyFinished()
+			currentWebUiBranch = ""
 		} else if body.Repository.Name == "xircl-api" {
 			updateGit(ref, "xircl-api")
-			Shellout("cd /var/www/hooker/ && docker-compose up sourceguardian")
+			Shellout(context.Background(), "cd /var/www/hooker/ && docker-compose up sourceguardian")
 		} else {
 			fmt.Println("Not target commit, skip...")
 		}
 	}
+}
+
+func getTagAndBranch(body Body) (tag string, branch string) {
+	branch = body.Ref
+	if body.BaseRef != nil {
+		branch = strings.Replace(*body.BaseRef, "refs/heads/", "", -1)
+		tag = strings.Replace(body.Ref, "refs/tags/", "", -1)
+	}
+	return
 }
 
 func updateGit(branch string, projectFolderName string) {
@@ -96,7 +107,7 @@ func updateGit(branch string, projectFolderName string) {
 		"git checkout " + branch + " && " +
 		"git pull"
 	fmt.Println(cmd)
-	Shellout(cmd)
+	Shellout(context.Background(), cmd)
 }
 
 func startRestApiServer() {
@@ -132,12 +143,17 @@ func hook(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	_, branch := getTagAndBranch(hookBody)
+	if branch == currentWebUiBranch {
+		finishWebUiBuild()
+		time.Sleep(1 * time.Second)
+	}
 	queue <- hookBody
 	w.WriteHeader(http.StatusOK)
 }
 
-func Shellout(command string) {
-	cmd := exec.Command(ShellToUse, "-c", command)
+func Shellout(ctx context.Context, command string) {
+	cmd := exec.CommandContext(ctx, ShellToUse, "-c", command)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
