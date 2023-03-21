@@ -92,7 +92,7 @@ func startQueueHandler() {
 }
 
 func getTagAndBranch(body Body) (tag string, branch string) {
-	branch = body.Ref
+	branch = strings.Replace(body.Ref, "refs/heads/", "", -1)
 	if body.BaseRef != nil {
 		branch = strings.Replace(*body.BaseRef, "refs/heads/", "", -1)
 		tag = strings.Replace(body.Ref, "refs/tags/", "", -1)
