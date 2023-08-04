@@ -78,13 +78,13 @@ func startQueueHandler() {
 			ctx, finishWebUiBuild = context.WithCancel(context.Background())
 			go bot.Process(ctx)
 			updateGit(ref, "web-ui")
-			Shellout(ctx, "cd /var/www/hooker/ && docker-compose build web_ui")
+			_ = Shellout(ctx, "cd /var/www/hooker/ && docker-compose build web_ui")
 			finishWebUiBuild()
 			bot.NotifyFinished()
 			currentWebUiBranch = ""
 		} else if body.Repository.Name == "xircl-api" {
 			updateGit(ref, "xircl-api")
-			Shellout(context.Background(), "cd /var/www/hooker/ && docker-compose up sourceguardian")
+			_ = Shellout(context.Background(), "cd /var/www/hooker/ && docker-compose up sourceguardian")
 		} else {
 			fmt.Println("Not target commit, skip...")
 		}
@@ -107,7 +107,21 @@ func updateGit(branch string, projectFolderName string) {
 		"git checkout " + branch + " && " +
 		"git pull"
 	fmt.Println(cmd)
-	Shellout(context.Background(), cmd)
+	err := Shellout(context.Background(), cmd)
+	if err != nil {
+		fmt.Println("Failed to update git, attempting to re-clone repository:", err)
+		cloneRepo(projectFolderName)
+		updateGit(branch, projectFolderName)
+	}
+}
+
+func cloneRepo(repoName string) {
+	cmd := "cd /var/www/hooker/ && rm -rf " + repoName + " && git clone git@github.com:Alliera/" + repoName + ".git"
+	fmt.Println(cmd)
+	err := Shellout(context.Background(), cmd)
+	if err != nil {
+		log.Fatalf("Failed to clone repo: %v", err)
+	}
 }
 
 func startRestApiServer() {
@@ -152,12 +166,12 @@ func hook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func Shellout(ctx context.Context, command string) {
+func Shellout(ctx context.Context, command string) error {
 	cmd := exec.CommandContext(ctx, ShellToUse, "-c", command)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	_ = cmd.Run()
+	return cmd.Run()
 }
 
 func Logger(next http.HandlerFunc) http.HandlerFunc {
