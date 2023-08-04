@@ -110,8 +110,8 @@ func updateGit(branch string, projectFolderName string) {
 	err := Shellout(context.Background(), cmd)
 	if err != nil {
 		fmt.Println("Failed to update git, attempting to re-clone repository:", err)
-		cloneRepo(projectFolderName)
-		updateGit(branch, projectFolderName)
+		//cloneRepo(projectFolderName)
+		//updateGit(branch, projectFolderName)
 	}
 }
 
