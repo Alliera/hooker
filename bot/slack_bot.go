@@ -22,7 +22,7 @@ type SlackBot struct {
 func NewSlackBot(token string, userToken string, channelId string, botName string) *SlackBot {
 	return &SlackBot{
 		ClientUser:        slack.New(userToken, slack.OptionDebug(true)),
-		Bot:               slack.New(channelId, slack.OptionDebug(false)),
+		Bot:               slack.New(token, slack.OptionDebug(false)),
 		ProgressMessage:   "Create build...",
 		LastExecutionTime: 150 * time.Second,
 		ChannelID:         channelId,
@@ -141,11 +141,7 @@ func (s *SlackBot) ClearMessages(substring string) {
 		if substring != "" {
 			query += " " + substring
 		}
-		resp, err := s.ClientUser.AuthTest()
-		if err != nil {
-			fmt.Println(resp)
-			return
-		}
+
 		messages, err = s.ClientUser.SearchMessages(query, params)
 
 		matchesCount = len(messages.Matches)
