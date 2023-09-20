@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hooker/bot"
+	"hooker/config"
 	"io"
 	"log"
 	"net/http"
@@ -17,12 +17,15 @@ import (
 const ShellToUse = "bash"
 
 var queue chan Body
-
-var currentWebUiBranch string
-
-var finishWebUiBuild func()
+var configs []*config.RepoConfig
 
 func main() {
+	var err error
+	configs, err = config.LoadConfig("config.yaml")
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
 	queue = make(chan Body, 300)
 	go startQueueHandler()
 	startRestApiServer()
@@ -61,32 +64,41 @@ func startQueueHandler() {
 			continue
 		}
 		ref := strings.Replace(body.Ref, "refs/heads/", "", -1)
-		Shellout(context.Background(), "source /var/www/hooker/.env")
-		if body.Repository.Name == "web-ui" {
-			var tag string
-			tag, currentWebUiBranch = getTagAndBranch(body)
-			bot.NotifyBuildInfo(
-				body.Pusher.Name,
-				body.HeadCommit.Author.Name,
-				tag,
-				currentWebUiBranch,
-				body.HeadCommit.Message,
-				body.HeadCommit.Timestamp,
-				body.HeadCommit.Id,
-			)
-			var ctx context.Context
-			ctx, finishWebUiBuild = context.WithCancel(context.Background())
-			go bot.Process(ctx)
-			updateGit(ref, "web-ui")
-			_ = Shellout(ctx, "cd /var/www/hooker/ && docker-compose build web_ui")
-			finishWebUiBuild()
-			bot.NotifyFinished()
-			currentWebUiBranch = ""
-		} else if body.Repository.Name == "xircl-api" {
-			updateGit(ref, "xircl-api")
-			_ = Shellout(context.Background(), "cd /var/www/hooker/ && docker-compose up sourceguardian")
-		} else {
-			fmt.Println("Not target commit, skip...")
+		Shellout(context.Background(), "source .env")
+
+		for _, repoConfig := range configs {
+			if body.Repository.Name == repoConfig.RepoName {
+				var tag string
+				tag, repoConfig.CurrentBranch = getTagAndBranch(body)
+
+				var ctx context.Context
+				ctx, repoConfig.FinishBuild = context.WithCancel(context.Background())
+				if repoConfig.Bot != nil {
+					repoConfig.Bot.NotifyBuildInfo(
+						repoConfig.Company,
+						repoConfig.RepoName,
+						body.Pusher.Name,
+						body.HeadCommit.Author.Name,
+						tag,
+						repoConfig.CurrentBranch,
+						body.HeadCommit.Message,
+						body.HeadCommit.Timestamp,
+						body.HeadCommit.Id,
+					)
+
+					go repoConfig.Bot.Process(ctx)
+				}
+				updateGit(ref, repoConfig.RepoName)
+				_ = Shellout(ctx, repoConfig.ShellCommand)
+
+				if repoConfig.FinishBuild != nil {
+					repoConfig.FinishBuild()
+				}
+
+				if repoConfig.Bot != nil {
+					repoConfig.Bot.NotifyFinished()
+				}
+			}
 		}
 	}
 }
@@ -101,7 +113,7 @@ func getTagAndBranch(body Body) (tag string, branch string) {
 }
 
 func updateGit(branch string, projectFolderName string) {
-	cmd := "cd /var/www/hooker/" + projectFolderName + " && " +
+	cmd := "cd /var/www/hooker/data/" + projectFolderName + " && " +
 		"git reset --hard && git checkout master && git pull && " +
 		"for b in `git branch --merged | grep -v \\*`; do git branch -D $b; done && " +
 		"git checkout " + branch + " && " +
@@ -109,18 +121,7 @@ func updateGit(branch string, projectFolderName string) {
 	fmt.Println(cmd)
 	err := Shellout(context.Background(), cmd)
 	if err != nil {
-		fmt.Println("Failed to update git, attempting to re-clone repository:", err)
-		//cloneRepo(projectFolderName)
-		//updateGit(branch, projectFolderName)
-	}
-}
-
-func cloneRepo(repoName string) {
-	cmd := "cd /var/www/hooker/ && rm -rf " + repoName + " && git clone git@github.com:Alliera/" + repoName + ".git"
-	fmt.Println(cmd)
-	err := Shellout(context.Background(), cmd)
-	if err != nil {
-		log.Fatalf("Failed to clone repo: %v", err)
+		fmt.Println("Failed to update git:", err)
 	}
 }
 
@@ -158,10 +159,13 @@ func hook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, branch := getTagAndBranch(hookBody)
-	if branch == currentWebUiBranch {
-		finishWebUiBuild()
-		time.Sleep(1 * time.Second)
+	for _, repoConfig := range configs {
+		if hookBody.Repository.Name == repoConfig.RepoName && branch == repoConfig.CurrentBranch {
+			repoConfig.FinishBuild()
+			time.Sleep(1 * time.Second)
+		}
 	}
+
 	queue <- hookBody
 	w.WriteHeader(http.StatusOK)
 }

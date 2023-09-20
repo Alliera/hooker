@@ -3,36 +3,37 @@ package bot
 import (
 	"context"
 	"fmt"
-	"github.com/joho/godotenv"
 	"github.com/sfreiberg/progress"
 	"github.com/slack-go/slack"
-	"os"
 	"strings"
 	"time"
 )
 
-var token string
-var channelID string
-var userToken string
-var clientUser *slack.Client
-var bot *slack.Client
-var ProgressMessage string
-var lastExecutionTime time.Duration
-
-func init() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		panic(err)
-	}
-	token = os.Getenv("SLACK_AUTH_TOKEN")
-	userToken = os.Getenv("SLACK_AUTH_USER_TOKEN")
-	channelID = os.Getenv("SLACK_CHANNEL_ID")
-	clientUser = slack.New(userToken, slack.OptionDebug(false))
-	bot = slack.New(token, slack.OptionDebug(false))
-	ProgressMessage = "Create build..."
-	lastExecutionTime = 150 * time.Second
+type SlackBot struct {
+	ClientUser        *slack.Client
+	Bot               *slack.Client
+	ProgressMessage   string
+	LastExecutionTime time.Duration
+	ChannelID         string
+	AuthToken         string
+	BootName          string
 }
-func NotifyBuildInfo(
+
+func NewSlackBot(token string, userToken string, channelId string, botName string) *SlackBot {
+	return &SlackBot{
+		ClientUser:        slack.New(userToken, slack.OptionDebug(true)),
+		Bot:               slack.New(channelId, slack.OptionDebug(false)),
+		ProgressMessage:   "Create build...",
+		LastExecutionTime: 150 * time.Second,
+		ChannelID:         channelId,
+		AuthToken:         token,
+		BootName:          botName,
+	}
+}
+
+func (s *SlackBot) NotifyBuildInfo(
+	company string,
+	repoName string,
 	pusher string,
 	author string,
 	tag string,
@@ -58,36 +59,37 @@ func NotifyBuildInfo(
 	})
 	blocks = append(blocks, createSection("🥷 "+"*Pusher:*", pusher))
 	blocks = append(blocks, createSection("👨‍💻️ "+"*Author:*", author))
+	baseUrl := "https://github.com/" + company + "/" + repoName
 	if tag != "" {
 		blocks = append(
 			blocks,
 			createSection(
 				"🏷️ "+"*Tag:*",
-				"<https://github.com/Alliera/web-ui/releases/tag/"+tag+"|"+tag+">",
+				"<"+baseUrl+"/releases/tag/"+tag+"|"+tag+">",
 			))
 	}
 	blocks = append(
 		blocks,
 		createSection(
 			"🔀 "+"*Branch:*",
-			"<https://github.com/Alliera/web-ui/commits/"+branch+"|"+branch+">",
+			"<"+baseUrl+"/commits/"+branch+"|"+branch+">",
 		))
 	blocks = append(
 		blocks,
 		createSection(
 			"📝 "+"*Message:*",
-			"<https://github.com/Alliera/web-ui/commit/"+hash+"|"+commitMessage+">",
+			"<"+baseUrl+"/commit/"+hash+"|"+commitMessage+">",
 		))
 	blocks = append(
 		blocks,
 		createSection(
 			"#⃣️ "+"*Hash:*",
-			"<https://github.com/Alliera/web-ui/commit/"+hash+"|"+hash[0:20]+">",
+			"<"+baseUrl+"/commit/"+hash+"|"+hash[0:20]+">",
 		))
 	blocks = append(blocks, createSection("📆 "+"*Date:*", date))
 
-	_, _, err := bot.PostMessage(
-		channelID,
+	_, _, err := s.Bot.PostMessage(
+		s.ChannelID,
 		slack.MsgOptionBlocks(blocks...),
 	)
 
@@ -95,9 +97,9 @@ func NotifyBuildInfo(
 		fmt.Println(err)
 	}
 }
-func NotifyFinished() {
-	_, _, err := bot.PostMessage(
-		channelID,
+func (s *SlackBot) NotifyFinished() {
+	_, _, err := s.Bot.PostMessage(
+		s.ChannelID,
 		slack.MsgOptionBlocks(slack.SectionBlock{
 			Type: slack.MBTHeader,
 			Text: &slack.TextBlockObject{
@@ -129,20 +131,26 @@ func createSection(title string, text string) slack.SectionBlock {
 		},
 	}
 }
-func ClearMessages(substring string) {
+func (s *SlackBot) ClearMessages(substring string) {
 	params := slack.NewSearchParameters()
 	var err error
 	matchesCount := 1
 	for err == nil && matchesCount > 0 {
 		var messages *slack.SearchMessages
-		query := "in:#web-ui-bot"
+		query := "in:#" + s.BootName
 		if substring != "" {
 			query += " " + substring
 		}
-		messages, err = clientUser.SearchMessages(query, params)
+		resp, err := s.ClientUser.AuthTest()
+		if err != nil {
+			fmt.Println(resp)
+			return
+		}
+		messages, err = s.ClientUser.SearchMessages(query, params)
+
 		matchesCount = len(messages.Matches)
 		for _, message := range messages.Matches {
-			_, _, err = bot.DeleteMessage(channelID, message.Timestamp)
+			_, _, err = s.Bot.DeleteMessage(s.ChannelID, message.Timestamp)
 			if err != nil {
 				fmt.Println(err)
 			}
@@ -150,15 +158,15 @@ func ClearMessages(substring string) {
 		params.Page += 1
 	}
 }
-func Process(ctx context.Context) {
+func (s *SlackBot) Process(ctx context.Context) {
 	startTime := time.Now()
-	ClearMessages(ProgressMessage)
-	opts := progress.DefaultOptions(ProgressMessage)
+	s.ClearMessages(s.ProgressMessage)
+	opts := progress.DefaultOptions(s.ProgressMessage)
 	opts.Width = 10
 	opts.Fill = "🟥"
 	opts.Empty = "⬛"
-	pbar := progress.New(token, channelID, opts)
-	opts.TotalUnits = int(lastExecutionTime / time.Second)
+	pbar := progress.New(s.AuthToken, s.ChannelID, opts)
+	opts.TotalUnits = int(s.LastExecutionTime / time.Second)
 	i := 0
 	for {
 		select {
@@ -166,7 +174,7 @@ func Process(ctx context.Context) {
 			_ = pbar.Update(opts.TotalUnits)
 			timeDiff := time.Now().Sub(startTime)
 			if timeDiff > 1*time.Minute {
-				lastExecutionTime = timeDiff
+				s.LastExecutionTime = timeDiff
 			}
 			return
 		case <-time.After(1 * time.Second):
