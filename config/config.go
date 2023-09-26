@@ -8,6 +8,7 @@ import (
 
 type RepoConfig struct {
 	Company            string        `yaml:"company"`
+	WatchedBranches    []string      `yaml:"watched_branches"`
 	RepoName           string        `yaml:"repo_name"`
 	SlackAuthToken     string        `yaml:"slack_auth_token"`
 	SlackAuthUserToken string        `yaml:"slack_auth_user_token"`

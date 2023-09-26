@@ -159,15 +159,31 @@ func hook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, branch := getTagAndBranch(hookBody)
+
 	for _, repoConfig := range configs {
-		if hookBody.Repository.Name == repoConfig.RepoName && branch == repoConfig.CurrentBranch {
-			repoConfig.FinishBuild()
-			time.Sleep(1 * time.Second)
+		if hookBody.Repository.Name == repoConfig.RepoName {
+			if branch == repoConfig.CurrentBranch {
+				repoConfig.FinishBuild()
+				time.Sleep(1 * time.Second)
+			}
+			if repoConfig.WatchedBranches == nil ||
+				(len(repoConfig.WatchedBranches) != 0 && contains(repoConfig.WatchedBranches, branch)) {
+				queue <- hookBody
+			}
 		}
 	}
 
-	queue <- hookBody
 	w.WriteHeader(http.StatusOK)
+}
+
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+
+	return false
 }
 
 func Shellout(ctx context.Context, command string) error {
