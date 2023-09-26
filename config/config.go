@@ -9,6 +9,7 @@ import (
 type RepoConfig struct {
 	Company            string        `yaml:"company"`
 	WatchedBranches    []string      `yaml:"watched_branches"`
+	HomeFolder         string        `yaml:"home_folder"`
 	RepoName           string        `yaml:"repo_name"`
 	SlackAuthToken     string        `yaml:"slack_auth_token"`
 	SlackAuthUserToken string        `yaml:"slack_auth_user_token"`
@@ -32,6 +33,9 @@ func LoadConfig(filename string) ([]*RepoConfig, error) {
 		return nil, err
 	}
 	for _, conf := range configs {
+		if conf.HomeFolder == "" {
+			panic("home_folder is not defined")
+		}
 		if conf.SlackChannelID != "" {
 			conf.Bot = bot.NewSlackBot(conf.SlackAuthToken, conf.SlackAuthUserToken, conf.SlackChannelID, conf.BotName)
 		}

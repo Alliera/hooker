@@ -88,7 +88,7 @@ func startQueueHandler() {
 
 					go repoConfig.Bot.Process(ctx)
 				}
-				updateGit(ref, repoConfig.RepoName)
+				updateGit(repoConfig.HomeFolder, ref, repoConfig.RepoName)
 				_ = Shellout(ctx, repoConfig.ShellCommand)
 
 				if repoConfig.FinishBuild != nil {
@@ -112,8 +112,8 @@ func getTagAndBranch(body Body) (tag string, branch string) {
 	return
 }
 
-func updateGit(branch string, projectFolderName string) {
-	cmd := "cd /var/www/hooker/data/" + projectFolderName + " && " +
+func updateGit(homeFolder string, branch string, projectFolderName string) {
+	cmd := "cd " + homeFolder + "/" + projectFolderName + " && " +
 		"git reset --hard && git checkout master && git pull && " +
 		"for b in `git branch --merged | grep -v \\*`; do git branch -D $b; done && " +
 		"git checkout " + branch + " && " +
