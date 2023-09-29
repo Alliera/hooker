@@ -19,8 +19,8 @@ type SlackBot struct {
 	BootName          string
 }
 
-func NewSlackBot(token string, userToken string, channelId string, botName string) *SlackBot {
-	return &SlackBot{
+func NewSlackBot(token string, userToken string, channelId string, botName string, queue chan interface{}) *SlackBot {
+	bot := &SlackBot{
 		ClientUser:        slack.New(userToken, slack.OptionDebug(true)),
 		Bot:               slack.New(token, slack.OptionDebug(false)),
 		ProgressMessage:   "Create build...",
@@ -28,6 +28,51 @@ func NewSlackBot(token string, userToken string, channelId string, botName strin
 		ChannelID:         channelId,
 		AuthToken:         token,
 		BootName:          botName,
+	}
+	m, err := bot.Bot.AuthTest()
+	if err != nil {
+		panic(m)
+	}
+	go bot.PollMessages(queue)
+	return bot
+}
+
+func (s *SlackBot) Write(p []byte) (n int, err error) {
+	text := string(p)
+	if err = s.SendPlainText(text); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (s *SlackBot) PollMessages(queue chan interface{}) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	// Устанавливаем latestTimestamp в текущее время при первом запуске
+	latestTimestamp := fmt.Sprintf("%v", time.Now().Unix())
+
+	for range ticker.C {
+		params := slack.GetConversationHistoryParameters{
+			ChannelID: s.ChannelID,
+			Oldest:    latestTimestamp, // Получаем только сообщения, отправленные после последнего обработанного сообщения
+		}
+
+		history, err := s.Bot.GetConversationHistory(&params)
+		if err != nil {
+			fmt.Println("Error getting conversation history:", err)
+			continue
+		}
+
+		for _, message := range history.Messages {
+			if message.User != "" && message.User != s.BootName {
+				queue <- message
+				fmt.Printf("Received a message: %v\n", message.Text)
+				if message.Timestamp > latestTimestamp {
+					latestTimestamp = message.Timestamp
+				}
+			}
+		}
 	}
 }
 
@@ -97,6 +142,12 @@ func (s *SlackBot) NotifyBuildInfo(
 		fmt.Println(err)
 	}
 }
+
+func (s *SlackBot) SendPlainText(text string) error {
+	_, _, err := s.Bot.PostMessage(s.ChannelID, slack.MsgOptionText(text, false))
+	return err
+}
+
 func (s *SlackBot) NotifyFinished() {
 	_, _, err := s.Bot.PostMessage(
 		s.ChannelID,
