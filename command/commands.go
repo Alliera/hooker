@@ -16,7 +16,7 @@ func HandleCommand(commandMessage string, config *config.ProjectConfig) {
 	if config.HasCommands() {
 		command := ""
 		if strings.Contains(commandMessage, " ") {
-			parts := strings.Split(commandMessage, "")
+			parts := strings.Split(commandMessage, " ")
 			if len(parts) != 2 {
 				sendMessage(config.Bot, "too many arguments")
 				return
